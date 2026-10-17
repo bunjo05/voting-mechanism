@@ -6,6 +6,40 @@ use App\Http\Controllers\VotersController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\Artisan;
+
+Route::get('/create-public-link', function () {
+    $target = base_path('public');
+    $link = base_path('../public_html');
+
+    if (file_exists($link) || is_link($link)) {
+        return response()->json([
+            'success' => false,
+            'message' => 'The destination already exists. Remove or rename it before creating the link.',
+        ], 409);
+    }
+
+    if (!is_dir($target)) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Laravel public directory was not found.',
+        ], 404);
+    }
+
+    if (symlink($target, $link)) {
+        return response()->json([
+            'success' => true,
+            'message' => 'Symbolic link created successfully.',
+            'target' => $target,
+            'link' => $link,
+        ]);
+    }
+
+    return response()->json([
+        'success' => false,
+        'message' => 'Failed to create the symbolic link. Check hosting permissions.',
+    ], 500);
+});
 
 // Route::get('/', function () {
 //     return Inertia::render('Welcome', [
@@ -18,6 +52,10 @@ use Inertia\Inertia;
 
 // Route::get('/vote', [VotersController::class, 'index'])->name('vote');
 
+Route::put(
+    '/admin/contestants/{contestant}',
+    [VotersController::class, 'updateContestant']
+)->name('admin.contestants.update');
 Route::get('/', [VotersController::class, 'index'])->name('vote');
 Route::get('/contestant/register', [VotersController::class, 'contestantRegister'])->name('contestant.register');
 Route::post('/contestant/register', [VotersController::class, 'storeContestantRegister'])->name('contestant.register.submit');

@@ -1,6 +1,7 @@
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import React, { useMemo, useState } from "react";
-import { Head, router } from "@inertiajs/react";
+import { Head, router, useForm } from "@inertiajs/react";
+import { Edit } from "lucide-react";
 import {
     Users,
     Search,
@@ -22,11 +23,71 @@ import {
     RefreshCw,
 } from "lucide-react";
 
-export default function Contestants({ contestants = [] }) {
+export default function Contestants({ contestants = [], positions = [] }) {
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
     const [paymentFilter, setPaymentFilter] = useState("all");
     const [selectedContestant, setSelectedContestant] = useState(null);
+
+    const [editingContestant, setEditingContestant] = useState(null);
+
+    const {
+        data: editData,
+        setData: setEditData,
+        post: submitEdit,
+        processing: editProcessing,
+        errors: editErrors,
+        reset: resetEdit,
+        clearErrors: clearEditErrors,
+    } = useForm({
+        _method: "put",
+        full_name: "",
+        email: "",
+        phone_number: "",
+        address: "",
+        position_id: "",
+        passport_number: "",
+        passport_photo: null,
+    });
+
+    const openEditModal = (contestant) => {
+        clearEditErrors();
+
+        setEditData({
+            _method: "put",
+            full_name: contestant.full_name ?? "",
+            email: contestant.email ?? "",
+            phone_number: contestant.phone_number ?? "",
+            address: contestant.address ?? "",
+            position_id: String(contestant.position_id ?? ""),
+            passport_number: contestant.passport_number ?? "",
+            passport_photo: null,
+        });
+
+        setEditingContestant(contestant);
+    };
+
+    const closeEditModal = () => {
+        setEditingContestant(null);
+        resetEdit();
+        clearEditErrors();
+    };
+
+    const submitContestantEdit = (e) => {
+        e.preventDefault();
+
+        if (!editingContestant) return;
+
+        submitEdit(route("admin.contestants.update", editingContestant.id), {
+            forceFormData: true,
+            preserveScroll: true,
+
+            onSuccess: () => {
+                setEditingContestant(null);
+                resetEdit();
+            },
+        });
+    };
 
     const filteredContestants = useMemo(() => {
         return contestants.filter((contestant) => {
@@ -136,16 +197,292 @@ export default function Contestants({ contestants = [] }) {
 
     const photoUrl = (path) => {
         if (!path) return null;
-        if (path.startsWith("http://") || path.startsWith("https://")) {
+
+        if (/^https?:\/\//i.test(path)) {
             return path;
         }
 
-        return `/storage/${path.replace(/^\/?storage\//, "")}`;
+        const cleanPath = path.replace(/^\/+/, "").replace(/^public\//, "");
+
+        return `/${cleanPath}`;
     };
 
     return (
         <AuthenticatedLayout>
             <Head title="Manage Contestants" />
+
+            {/* Edit Contestant Modal */}
+            {editingContestant && (
+                <div
+                    className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-sm"
+                    onClick={closeEditModal}
+                >
+                    <div
+                        className="my-auto w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
+                            <div>
+                                <h2 className="text-lg font-bold text-slate-900">
+                                    Edit Contestant
+                                </h2>
+                                <p className="mt-1 text-sm text-slate-500">
+                                    Update registration #{editingContestant.id}
+                                </p>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={closeEditModal}
+                                className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                                aria-label="Close edit modal"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Edit Form */}
+                        <form onSubmit={submitContestantEdit}>
+                            <div className="max-h-[70vh] space-y-5 overflow-y-auto p-6">
+                                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                                    {/* Full Name */}
+                                    <div>
+                                        <label className="mb-2 block text-sm font-semibold text-slate-700">
+                                            Full Name
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={editData.full_name}
+                                            onChange={(e) =>
+                                                setEditData(
+                                                    "full_name",
+                                                    e.target.value,
+                                                )
+                                            }
+                                            required
+                                            className="w-full rounded-xl border-slate-200 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                        />
+                                        {editErrors.full_name && (
+                                            <p className="mt-1 text-xs text-red-600">
+                                                {editErrors.full_name}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {/* Email */}
+                                    <div>
+                                        <label className="mb-2 block text-sm font-semibold text-slate-700">
+                                            Email Address
+                                        </label>
+                                        <input
+                                            type="email"
+                                            value={editData.email}
+                                            onChange={(e) =>
+                                                setEditData(
+                                                    "email",
+                                                    e.target.value,
+                                                )
+                                            }
+                                            required
+                                            className="w-full rounded-xl border-slate-200 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                        />
+                                        {editErrors.email && (
+                                            <p className="mt-1 text-xs text-red-600">
+                                                {editErrors.email}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {/* Phone */}
+                                    <div>
+                                        <label className="mb-2 block text-sm font-semibold text-slate-700">
+                                            Phone Number
+                                        </label>
+                                        <input
+                                            type="tel"
+                                            value={editData.phone_number}
+                                            onChange={(e) =>
+                                                setEditData(
+                                                    "phone_number",
+                                                    e.target.value,
+                                                )
+                                            }
+                                            required
+                                            className="w-full rounded-xl border-slate-200 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                        />
+                                        {editErrors.phone_number && (
+                                            <p className="mt-1 text-xs text-red-600">
+                                                {editErrors.phone_number}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {/* Address */}
+                                    <div>
+                                        <label className="mb-2 block text-sm font-semibold text-slate-700">
+                                            Address
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={editData.address}
+                                            onChange={(e) =>
+                                                setEditData(
+                                                    "address",
+                                                    e.target.value,
+                                                )
+                                            }
+                                            required
+                                            className="w-full rounded-xl border-slate-200 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                        />
+                                        {editErrors.address && (
+                                            <p className="mt-1 text-xs text-red-600">
+                                                {editErrors.address}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {/* Position */}
+                                    <div>
+                                        <label className="mb-2 block text-sm font-semibold text-slate-700">
+                                            Position
+                                        </label>
+                                        <select
+                                            value={editData.position_id}
+                                            onChange={(e) =>
+                                                setEditData(
+                                                    "position_id",
+                                                    e.target.value,
+                                                )
+                                            }
+                                            required
+                                            className="w-full rounded-xl border-slate-200 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                        >
+                                            <option value="">
+                                                Select position
+                                            </option>
+                                            {positions.map((position) => (
+                                                <option
+                                                    key={position.id}
+                                                    value={String(position.id)}
+                                                >
+                                                    {position.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        {editErrors.position_id && (
+                                            <p className="mt-1 text-xs text-red-600">
+                                                {editErrors.position_id}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {/* Passport Number */}
+                                    <div>
+                                        <label className="mb-2 block text-sm font-semibold text-slate-700">
+                                            Passport Number
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={editData.passport_number}
+                                            onChange={(e) =>
+                                                setEditData(
+                                                    "passport_number",
+                                                    e.target.value.toUpperCase(),
+                                                )
+                                            }
+                                            required
+                                            className="w-full rounded-xl border-slate-200 text-sm uppercase focus:border-indigo-500 focus:ring-indigo-500"
+                                        />
+                                        {editErrors.passport_number && (
+                                            <p className="mt-1 text-xs text-red-600">
+                                                {editErrors.passport_number}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Current Passport Photo */}
+                                <div className="rounded-xl border border-slate-200 p-4">
+                                    <p className="mb-3 text-sm font-semibold text-slate-700">
+                                        Current Passport Photo
+                                    </p>
+
+                                    {editingContestant.passport_photo ? (
+                                        <img
+                                            src={photoUrl(
+                                                editingContestant.passport_photo,
+                                            )}
+                                            alt="Current passport"
+                                            className="h-24 w-24 rounded-xl border border-slate-200 object-cover"
+                                        />
+                                    ) : (
+                                        <p className="text-sm text-slate-500">
+                                            No passport photo uploaded.
+                                        </p>
+                                    )}
+
+                                    <label className="mb-2 mt-4 block text-sm font-semibold text-slate-700">
+                                        Replace Passport Photo (Optional)
+                                    </label>
+
+                                    <input
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/jpg"
+                                        onChange={(e) =>
+                                            setEditData(
+                                                "passport_photo",
+                                                e.target.files?.[0] ?? null,
+                                            )
+                                        }
+                                        className="block w-full text-sm text-slate-600 file:mr-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:font-semibold file:text-indigo-700 hover:file:bg-indigo-100"
+                                    />
+
+                                    <p className="mt-2 text-xs text-slate-500">
+                                        Accepted formats: JPG, JPEG, PNG.
+                                        Maximum size: 5 MB. Leave empty to keep
+                                        the existing photo.
+                                    </p>
+
+                                    {editErrors.passport_photo && (
+                                        <p className="mt-1 text-xs text-red-600">
+                                            {editErrors.passport_photo}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Modal Footer */}
+                            <div className="flex flex-col-reverse gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4 sm:flex-row sm:justify-end">
+                                <button
+                                    type="button"
+                                    onClick={closeEditModal}
+                                    disabled={editProcessing}
+                                    className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
+
+                                <button
+                                    type="submit"
+                                    disabled={editProcessing}
+                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    {editProcessing && (
+                                        <RefreshCw
+                                            size={16}
+                                            className="animate-spin"
+                                        />
+                                    )}
+                                    {editProcessing
+                                        ? "Saving Changes..."
+                                        : "Save Changes"}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             <div className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 lg:px-8">
                 <div className="mx-auto max-w-7xl space-y-6">
@@ -439,6 +776,20 @@ export default function Contestants({ contestants = [] }) {
                                                     >
                                                         <Eye size={15} />
                                                         View
+                                                    </button>
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            openEditModal(
+                                                                contestant,
+                                                            )
+                                                        }
+                                                        title="Edit contestant"
+                                                        className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100"
+                                                    >
+                                                        <Edit size={15} />
+                                                        Edit
                                                     </button>
 
                                                     {contestant.status ===

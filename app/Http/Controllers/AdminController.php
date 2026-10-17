@@ -9,6 +9,10 @@ use App\Models\Voter;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
+use App\Mail\ContestantStatusUpdated;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+
 class AdminController extends Controller
 {
     public function dasboard()
@@ -65,6 +69,7 @@ class AdminController extends Controller
         );
     }
 
+
     public function updateContestantStatus(
         Request $request,
         Contestant $contestant
@@ -76,13 +81,38 @@ class AdminController extends Controller
             ],
         ]);
 
-        $contestant->update([
-            'status' => $validated['status'],
-        ]);
+        $oldStatus = $contestant->status;
+        $newStatus = $validated['status'];
+
+        // Update and notify only when the status actually changes.
+        if ($oldStatus !== $newStatus) {
+            $contestant->update([
+                'status' => $newStatus,
+            ]);
+
+            try {
+                Mail::to($contestant->email)->send(
+                    new ContestantStatusUpdated(
+                        $contestant,
+                        'status',
+                        $oldStatus,
+                        $newStatus
+                    )
+                );
+            } catch (\Throwable $e) {
+                Log::error('Contestant status email failed.', [
+                    'contestant_id' => $contestant->id,
+                    'email' => $contestant->email,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
 
         return back()->with(
             'success',
-            'Contestant status updated successfully.'
+            $oldStatus !== $newStatus
+                ? 'Contestant status updated successfully.'
+                : 'Contestant status remains unchanged.'
         );
     }
 
@@ -97,15 +127,62 @@ class AdminController extends Controller
             ],
         ]);
 
-        $contestant->update([
-            'payment_status' => $validated['payment_status'],
-        ]);
+        $oldStatus = $contestant->payment_status;
+        $newStatus = $validated['payment_status'];
+
+        // Update and notify only when the payment status changes.
+        if ($oldStatus !== $newStatus) {
+            $contestant->update([
+                'payment_status' => $newStatus,
+            ]);
+
+            try {
+                Mail::to($contestant->email)->send(
+                    new ContestantStatusUpdated(
+                        $contestant,
+                        'payment status',
+                        $oldStatus,
+                        $newStatus
+                    )
+                );
+            } catch (\Throwable $e) {
+                Log::error('Contestant payment status email failed.', [
+                    'contestant_id' => $contestant->id,
+                    'email' => $contestant->email,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
 
         return back()->with(
             'success',
-            'Contestant payment status updated successfully.'
+            $oldStatus !== $newStatus
+                ? 'Payment status updated successfully.'
+                : 'Payment status remains unchanged.'
         );
     }
+
+
+    // public function updateContestantPaymentStatus(
+    //     Request $request,
+    //     Contestant $contestant
+    // ) {
+    //     $validated = $request->validate([
+    //         'payment_status' => [
+    //             'required',
+    //             Rule::in(['pending', 'paid']),
+    //         ],
+    //     ]);
+
+    //     $contestant->update([
+    //         'payment_status' => $validated['payment_status'],
+    //     ]);
+
+    //     return back()->with(
+    //         'success',
+    //         'Contestant payment status updated successfully.'
+    //     );
+    // }
 
     public function voters()
     {

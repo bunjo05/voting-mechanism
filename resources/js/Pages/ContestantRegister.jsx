@@ -1,5 +1,5 @@
 import GuestLayout from "@/Layouts/GuestLayout";
-import React from "react";
+import React, { useState } from "react";
 import { Head, useForm } from "@inertiajs/react";
 import {
     User,
@@ -13,9 +13,16 @@ import {
     Upload,
     FileImage,
     CheckCircle2,
+    X,
 } from "lucide-react";
 
 export default function ContestantRegister({ positions }) {
+    const [showSuccessModal, setShowSuccessModal] = useState(false);
+
+    const [successMessage, setSuccessMessage] = useState(
+        "Your registration has been submitted successfully.",
+    );
+
     const { data, setData, post, processing, errors, reset } = useForm({
         full_name: "",
         email: "",
@@ -33,7 +40,17 @@ export default function ContestantRegister({ positions }) {
             preserveScroll: true,
             forceFormData: true,
 
-            onSuccess: () => {
+            onSuccess: (page) => {
+                const message = page.props.flash?.success;
+
+                setSuccessMessage(
+                    message ||
+                        "Your registration has been submitted successfully. Your application is now pending review.",
+                );
+
+                setShowSuccessModal(true);
+
+                // Reset only after a successful server response.
                 reset();
             },
         });
@@ -42,6 +59,87 @@ export default function ContestantRegister({ positions }) {
     return (
         <GuestLayout>
             <Head title="Contestant Registration" />
+
+            {/* Successful Registration Modal */}
+            {showSuccessModal && (
+                <div
+                    className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="success-modal-title"
+                >
+                    <div className="relative w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl">
+                        {/* Close Button */}
+                        <button
+                            type="button"
+                            onClick={() => setShowSuccessModal(false)}
+                            aria-label="Close success modal"
+                            className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                        >
+                            <X size={20} />
+                        </button>
+
+                        {/* Success Content */}
+                        <div className="px-7 pb-8 pt-10 text-center sm:px-9">
+                            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-50">
+                                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100">
+                                    <CheckCircle2
+                                        size={36}
+                                        className="text-emerald-600"
+                                        strokeWidth={2}
+                                    />
+                                </div>
+                            </div>
+
+                            <h2
+                                id="success-modal-title"
+                                className="mt-6 text-2xl font-bold tracking-tight text-slate-900"
+                            >
+                                Registration Successful!
+                            </h2>
+
+                            <p className="mt-3 text-sm leading-6 text-slate-600">
+                                {successMessage}
+                            </p>
+
+                            <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-left">
+                                <div className="flex items-start gap-3">
+                                    <div className="mt-0.5">
+                                        <ShieldCheck
+                                            size={21}
+                                            className="text-amber-600"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <p className="text-sm font-semibold text-amber-900">
+                                            Application Pending Review
+                                        </p>
+
+                                        <p className="mt-1 text-xs leading-5 text-amber-800">
+                                            Your registration has been received.
+                                            Please wait for the administration
+                                            team to review your application.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() => setShowSuccessModal(false)}
+                                className="mt-7 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-200"
+                            >
+                                <CheckCircle2 size={18} />
+                                Done
+                            </button>
+                        </div>
+
+                        {/* Bottom Accent */}
+                        <div className="h-1.5 bg-gradient-to-r from-indigo-600 via-violet-500 to-emerald-500" />
+                    </div>
+                </div>
+            )}
 
             <div className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6 lg:px-8">
                 <div className="mx-auto max-w-5xl">

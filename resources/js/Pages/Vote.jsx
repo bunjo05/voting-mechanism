@@ -45,7 +45,7 @@ export default function Vote({ positions = [], contestants = [] }) {
             return path;
         }
 
-        return `/storage/${path.replace(/^\/?storage\//, "")}`;
+        return `/public/${path.replace(/^\/?storage\//, "")}`;
     };
 
     const updateVoterField = (field, value) => {

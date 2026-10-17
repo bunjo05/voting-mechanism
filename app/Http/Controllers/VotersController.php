@@ -2,12 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\ContestantRegisteredMail;
 use App\Models\Contestant;
 use App\Models\Position;
+use App\Models\User;
 use App\Models\Vote;
 use App\Models\Voter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class VotersController extends Controller
@@ -141,44 +146,135 @@ class VotersController extends Controller
             ->with('success', 'Your votes have been recorded successfully.');
     }
 
-
-
-    public function storeContestantRegister(Request $request)
+    public function updateContestant(Request $request, Contestant $contestant)
     {
+        // Normalize identifiers before validation.
+        $request->merge([
+            'email' => strtolower(trim((string) $request->input('email'))),
+            'passport_number' => strtoupper(
+                trim((string) $request->input('passport_number'))
+            ),
+        ]);
+
         $validated = $request->validate([
-            'full_name' => [
-                'required',
-                'string',
-                'max:255',
-            ],
+            'full_name' => ['required', 'string', 'max:255'],
 
             'email' => [
                 'required',
                 'email',
                 'max:255',
-                'unique:contestants,email',
+                Rule::unique('contestants', 'email')->ignore($contestant->id),
             ],
 
-            'phone_number' => [
-                'required',
-                'string',
-                'max:30',
-            ],
+            'phone_number' => ['required', 'string', 'max:30'],
+            'address' => ['required', 'string', 'max:500'],
 
-            'address' => [
-                'required',
-                'string',
-                'max:500',
-            ],
-            'position_id' => [
-                'required',
-                'exists:positions,id',
-            ],
+            'position_id' => ['required', 'exists:positions,id'],
 
             'passport_number' => [
                 'required',
                 'string',
                 'max:100',
+                Rule::unique('contestants', 'passport_number')
+                    ->ignore($contestant->id),
+            ],
+
+            // A new passport photo is optional during editing.
+            'passport_photo' => [
+                'nullable',
+                'image',
+                'mimes:jpg,jpeg,png',
+                'max:5120',
+            ],
+        ], [
+            'email.unique' =>
+            'This email address is already registered by another contestant.',
+
+            'passport_number.unique' =>
+            'This passport number is already registered by another contestant.',
+        ]);
+
+        $oldPhoto = $contestant->passport_photo;
+        $newPhotoPath = null;
+
+        // Save a replacement photo directly inside public/.
+        if ($request->hasFile('passport_photo')) {
+            $destinationPath = public_path('contestants/passports');
+
+            if (!is_dir($destinationPath)) {
+                mkdir($destinationPath, 0755, true);
+            }
+
+            $photo = $request->file('passport_photo');
+
+            $fileName = uniqid('passport_', true) . '.' .
+                $photo->getClientOriginalExtension();
+
+            $photo->move($destinationPath, $fileName);
+
+            $newPhotoPath = 'contestants/passports/' . $fileName;
+            $validated['passport_photo'] = $newPhotoPath;
+        }
+
+        // Update contestant details.
+        $contestant->update($validated);
+
+        // Delete the old photo only after the database update succeeds.
+        if ($newPhotoPath && $oldPhoto) {
+            $oldPhotoPath = public_path(
+                ltrim(
+                    preg_replace('#^/?public/#', '', $oldPhoto),
+                    '/'
+                )
+            );
+
+            // Only delete files from the contestant passport directory.
+            $passportDirectory = realpath(
+                public_path('contestants/passports')
+            );
+            $resolvedOldPhoto = realpath($oldPhotoPath);
+
+            if (
+                $passportDirectory &&
+                $resolvedOldPhoto &&
+                str_starts_with(
+                    $resolvedOldPhoto,
+                    $passportDirectory . DIRECTORY_SEPARATOR
+                ) &&
+                is_file($resolvedOldPhoto)
+            ) {
+                unlink($resolvedOldPhoto);
+            }
+        }
+
+        return redirect()
+            ->back()
+            ->with('success', 'Contestant details updated successfully.');
+    }
+
+
+    public function storeContestantRegister(Request $request)
+    {
+        $validated = $request->validate([
+            'full_name' => ['required', 'string', 'max:255'],
+
+            'email' => [
+                'required',
+                'string',
+                'email',
+                'max:255',
+                'unique:contestants,email',
+            ],
+
+            'phone_number' => ['required', 'string', 'max:30'],
+            'address' => ['required', 'string', 'max:500'],
+            'position_id' => ['required', 'exists:positions,id'],
+
+            'passport_number' => [
+                'required',
+                'string',
+                'max:100',
+                'unique:contestants,passport_number',
             ],
 
             'passport_photo' => [
@@ -187,48 +283,86 @@ class VotersController extends Controller
                 'mimes:jpg,jpeg,png',
                 'max:5120',
             ],
+        ], [
+            'email.unique' =>
+            'This email address is already registered. Please use a different email address.',
+
+            'passport_number.unique' =>
+            'This passport number is already registered. Each contestant must use a unique passport number.',
         ]);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Store Passport Photo
-        |--------------------------------------------------------------------------
-        */
+        // Normalize email and passport number.
+        $validated['email'] = strtolower(trim($validated['email']));
 
-        if ($request->hasFile('passport_photo')) {
-            $validated['passport_photo'] = $request
-                ->file('passport_photo')
-                ->store('contestants/passports', 'public');
+        $validated['passport_number'] = strtoupper(
+            trim($validated['passport_number'])
+        );
+
+        // Store passport photo directly in public/contestants/passports.
+        $passportPhoto = $request->file('passport_photo');
+
+        $destinationPath = public_path('contestants/passports');
+
+        if (!is_dir($destinationPath)) {
+            mkdir($destinationPath, 0755, true);
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Default Registration Status
-        |--------------------------------------------------------------------------
-        */
+        $fileName = uniqid('passport_', true) . '.' .
+            $passportPhoto->getClientOriginalExtension();
 
+        $passportPhoto->move($destinationPath, $fileName);
+
+        // Store the relative photo path in the database.
+        $validated['passport_photo'] =
+            'contestants/passports/' . $fileName;
+
+        // Set default registration status.
         $validated['status'] = 'pending';
         $validated['payment_status'] = 'pending';
 
-        /*
-        |--------------------------------------------------------------------------
-        | Create Contestant
-        |--------------------------------------------------------------------------
-        */
+        // Save the contestant.
+        $contestant = Contestant::create($validated);
 
-        Contestant::create($validated);
-
-        /*
-        |--------------------------------------------------------------------------
-        | Redirect After Successful Registration
-        |--------------------------------------------------------------------------
-        */
+        // Send an email notification to all registered users.
+        try {
+            User::whereNotNull('email')
+                ->where('email', '!=', '')
+                ->select('id', 'email')
+                ->chunkById(100, function ($users) use ($contestant) {
+                    foreach ($users as $user) {
+                        try {
+                            Mail::to($user->email)->send(
+                                new ContestantRegisteredMail($contestant)
+                            );
+                        } catch (\Throwable $e) {
+                            Log::error(
+                                'Failed to notify user about contestant registration.',
+                                [
+                                    'user_id' => $user->id,
+                                    'contestant_id' => $contestant->id,
+                                    'error' => $e->getMessage(),
+                                ]
+                            );
+                        }
+                    }
+                });
+        } catch (\Throwable $e) {
+            Log::error(
+                'Failed to process contestant registration email notifications.',
+                [
+                    'contestant_id' => $contestant->id,
+                    'error' => $e->getMessage(),
+                ]
+            );
+        }
 
         return redirect()
             ->route('contestant.register')
-            ->with('success', 'Your contestant registration has been submitted successfully. Your application is now pending review.');
+            ->with(
+                'success',
+                'Your contestant registration has been submitted successfully. Your application is now pending review.'
+            );
     }
-
 
     public function results()
     {
