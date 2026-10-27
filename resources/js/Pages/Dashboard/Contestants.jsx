@@ -2,6 +2,7 @@ import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import React, { useMemo, useState } from "react";
 import { Head, router, useForm } from "@inertiajs/react";
 import { Edit } from "lucide-react";
+import { FileDown } from "lucide-react";
 import {
     Users,
     Search,
@@ -210,6 +211,30 @@ export default function Contestants({ contestants = [], positions = [] }) {
     return (
         <AuthenticatedLayout>
             <Head title="Manage Contestants" />
+
+            <div className="flex flex-col gap-2 sm:flex-row">
+                <button
+                    type="button"
+                    onClick={() =>
+                        (window.location.href = route(
+                            "admin.contestants.ballot-pdf",
+                        ))
+                    }
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
+                >
+                    <FileDown size={17} />
+                    Export Ballot PDF
+                </button>
+
+                <button
+                    type="button"
+                    onClick={() => router.reload({ only: ["contestants"] })}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100"
+                >
+                    <RefreshCw size={16} />
+                    Refresh
+                </button>
+            </div>
 
             {/* Edit Contestant Modal */}
             {editingContestant && (

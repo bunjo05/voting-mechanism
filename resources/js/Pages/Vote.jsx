@@ -19,6 +19,42 @@ import {
     ChevronRight,
 } from "lucide-react";
 
+function ContestantPhoto({ contestant }) {
+    const [imageFailed, setImageFailed] = React.useState(false);
+
+    const photoUrl = contestant.passport_photo
+        ? contestant.passport_photo.startsWith("http://") ||
+          contestant.passport_photo.startsWith("https://")
+            ? contestant.passport_photo
+            : `/storage/${path.replace(/^\/?storage\//, "")}`
+        : null;
+
+    if (!photoUrl || imageFailed) {
+        return (
+            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-indigo-50 to-slate-100">
+                <div className="flex h-24 w-24 items-center justify-center rounded-full bg-white text-indigo-300 shadow-sm">
+                    <UserRound size={48} />
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <img
+            src={photoUrl}
+            alt={`${contestant.full_name} profile`}
+            loading="lazy"
+            onError={() => setImageFailed(true)}
+            className="h-full w-full object-cover"
+            // Keep faces near the top visible. Set contestant.photo_position
+            // to values such as "center", "center 15%", or "left top" if needed.
+            style={{
+                objectPosition: contestant.photo_position || "center 20%",
+            }}
+        />
+    );
+}
+
 export default function Vote({ positions = [], contestants = [] }) {
     const { props } = usePage();
 
@@ -37,16 +73,6 @@ export default function Vote({ positions = [], contestants = [] }) {
     ).length;
 
     const allSelected = selectedCount === totalPositions && totalPositions > 0;
-
-    const getPhotoUrl = (path) => {
-        if (!path) return null;
-
-        if (path.startsWith("http://") || path.startsWith("https://")) {
-            return path;
-        }
-
-        return `/public/${path.replace(/^\/?storage\//, "")}`;
-    };
 
     const updateVoterField = (field, value) => {
         setData(field, value);
@@ -570,30 +596,11 @@ export default function Vote({ positions = [], contestants = [] }) {
                                                                             }`}
                                                                         >
                                                                             <div className="relative flex h-56 items-center justify-center overflow-hidden bg-gradient-to-br from-indigo-50 to-slate-100">
-                                                                                {contestant.passport_photo ? (
-                                                                                    <img
-                                                                                        src={getPhotoUrl(
-                                                                                            contestant.passport_photo,
-                                                                                        )}
-                                                                                        alt={`${contestant.full_name} profile`}
-                                                                                        loading="lazy"
-                                                                                        className="h-full w-full object-cover"
-                                                                                        onError={(
-                                                                                            event,
-                                                                                        ) => {
-                                                                                            event.currentTarget.style.display =
-                                                                                                "none";
-                                                                                        }}
-                                                                                    />
-                                                                                ) : (
-                                                                                    <div className="flex h-24 w-24 items-center justify-center rounded-full bg-white text-indigo-300 shadow-sm">
-                                                                                        <UserRound
-                                                                                            size={
-                                                                                                48
-                                                                                            }
-                                                                                        />
-                                                                                    </div>
-                                                                                )}
+                                                                                <ContestantPhoto
+                                                                                    contestant={
+                                                                                        contestant
+                                                                                    }
+                                                                                />
 
                                                                                 <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm">
                                                                                     <CheckCircle2

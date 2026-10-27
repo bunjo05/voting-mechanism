@@ -9,6 +9,9 @@ use App\Models\Voter;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Storage;
+
 use App\Mail\ContestantStatusUpdated;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -56,6 +59,102 @@ class AdminController extends Controller
             'stats' => $stats,
             'recentContestants' => $recentContestants,
         ]);
+    }
+
+    public function exportBallotPdf()
+    {
+        $positions = Position::with([
+            'contestants' => function ($query) {
+                $query->where('status', 'approved')
+                    ->where('payment_status', 'paid')
+                    ->orderBy('full_name');
+            },
+        ])
+            ->orderBy('name')
+            ->get();
+
+        // Only include positions that have eligible contestants.
+        $positions = $positions
+            ->filter(fn($position) => $position->contestants->isNotEmpty())
+            ->values();
+
+        abort_if(
+            $positions->isEmpty(),
+            404,
+            'There are no eligible contestants to include in the ballot.'
+        );
+
+        // Embed local photos so the PDF generator can display them.
+        foreach ($positions as $position) {
+            foreach ($position->contestants as $contestant) {
+                $contestant->ballot_photo = null;
+
+                if (empty($contestant->passport_photo)) {
+                    continue;
+                }
+
+                $photoPath = ltrim(
+                    str_replace('\\', '/', $contestant->passport_photo),
+                    '/'
+                );
+
+                // Support paths saved as public/storage/... or storage/...
+                $photoPath = preg_replace(
+                    '#^public/#',
+                    '',
+                    $photoPath
+                );
+
+                $absolutePath = null;
+
+                if (str_starts_with($photoPath, 'storage/')) {
+                    $relativePath = substr($photoPath, strlen('storage/'));
+
+                    if (Storage::disk('public')->exists($relativePath)) {
+                        $absolutePath = Storage::disk('public')
+                            ->path($relativePath);
+                    }
+                } elseif (is_file(public_path($photoPath))) {
+                    $absolutePath = public_path($photoPath);
+                } elseif (Storage::disk('public')->exists($photoPath)) {
+                    $absolutePath = Storage::disk('public')
+                        ->path($photoPath);
+                }
+
+                if (
+                    $absolutePath &&
+                    is_file($absolutePath) &&
+                    in_array(
+                        strtolower(pathinfo($absolutePath, PATHINFO_EXTENSION)),
+                        ['jpg', 'jpeg', 'png'],
+                        true
+                    )
+                ) {
+                    $mimeType = match (strtolower(pathinfo($absolutePath, PATHINFO_EXTENSION))) {
+                        'png' => 'image/png',
+                        default => 'image/jpeg',
+                    };
+
+                    $contestant->ballot_photo =
+                        'data:' . $mimeType . ';base64,' .
+                        base64_encode(file_get_contents($absolutePath));
+                }
+            }
+        }
+
+        $pdf = Pdf::loadView('pdf.ballot-paper', [
+            'positions' => $positions,
+            'generatedAt' => now(),
+        ])
+            ->setPaper('a4', 'portrait')
+            ->setOptions([
+                'isRemoteEnabled' => false,
+                'defaultFont' => 'DejaVu Sans',
+            ]);
+
+        return $pdf->download(
+            'official-ballot-paper-' . now()->format('Y-m-d') . '.pdf'
+        );
     }
 
     public function contestants()

@@ -41,6 +41,11 @@ Route::get('/create-public-link', function () {
     ], 500);
 });
 
+Route::get(
+    '/admin/contestants/export-ballot',
+    [AdminController::class, 'exportBallotPdf']
+)->name('admin.contestants.ballot-pdf');
+
 // Route::get('/', function () {
 //     return Inertia::render('Welcome', [
 //         'canLogin' => Route::has('login'),
